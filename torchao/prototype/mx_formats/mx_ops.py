@@ -93,8 +93,8 @@ def _addmm_mx_dispatch(
         M, K, N = a.shape[0], a.shape[1], b.shape[1]
         assert a._data.is_contiguous()
         assert b._data.t().is_contiguous()
-        assert a._block_size == 32, f"Invalid block size {a._block_size}"
-        assert b._block_size == 32, f"Invalid block size {b._block_size}"
+        assert a._block_size in [16, 32], f"Invalid block size {a._block_size}"
+        assert b._block_size in [16, 32], f"Invalid block size {b._block_size}"
 
         a_scale = a._scale_e8m0.view(M, K // a._block_size)
         b_scale = b._scale_e8m0.view(N, K // b._block_size)
@@ -176,6 +176,7 @@ def mx_t(func, types, args, kwargs):
         old._elem_dtype,
         old._block_size,
         old._orig_dtype,
+        old._scale_dtype,
         old._use_fp4_custom_triton_dequant_kernel,
         old._gemm_kernel_choice,
         old._pack_fp6,
@@ -220,6 +221,7 @@ def mx_view_op(func, types, args, kwargs):
         args[0]._elem_dtype,
         args[0]._block_size,
         args[0]._orig_dtype,
+        args[0]._scale_dtype,
         args[0]._use_fp4_custom_triton_dequant_kernel,
         args[0]._gemm_kernel_choice,
         args[0]._pack_fp6,
@@ -281,6 +283,7 @@ def mx_slice(func, types, args, kwargs):
             x._elem_dtype,
             x._block_size,
             x._orig_dtype,
+            x._scale_dtype,
             x._use_fp4_custom_triton_dequant_kernel,
             x._gemm_kernel_choice,
             x._pack_fp6,

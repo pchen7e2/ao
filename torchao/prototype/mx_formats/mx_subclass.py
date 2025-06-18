@@ -6,7 +6,7 @@
 
 import types
 from dataclasses import dataclass
-from typing import Optional
+from typing import Literal, Optional, Union
 
 import torch
 
@@ -25,6 +25,30 @@ from torchao.quantization.transform_module import (
     register_quantize_module_handler,
 )
 from torchao.utils import TORCH_VERSION_AT_LEAST_2_5, is_sm_at_least_100
+
+
+def _validate_scale_dtype(
+    block_size: int,
+    weight_dtype: torch.dtype,
+    activation_dtype: torch.dtype,
+    scale_dtype: torch.dtype,
+):
+    """Validate that the scale dtype is one of the supported float8 types."""
+    assert scale_dtype in [
+        torch.float8_e8m0fnu,
+        torch.float8_e4m3fn,
+    ], f"Unsupported scale_dtype {scale_dtype}, must be float8_e8m0fnu or float8_e4m3fn"
+    if scale_dtype == torch.float8_e8m0fnu:
+        _validate_elem_dtype(weight_dtype)
+        _validate_elem_dtype(activation_dtype)
+        return
+
+    assert (
+        weight_dtype == activation_dtype and weight_dtype == torch.float4_e2m1fn_x2
+    ), (
+        f"scale_dtype {scale_dtype} is only supported with weight_dtype {weight_dtype} and activation_dtype {activation_dtype}, got weight_dtype {weight_dtype} and activation_dtype {activation_dtype}"
+    )
+    assert block_size == 16, f"For NVFP4, block_size must be 16, got {block_size}"
 
 
 # Note: This API is extra prototype and will change in the future
@@ -61,11 +85,15 @@ class MXFPInferenceConfig(AOBaseConfig):
     - MXTensor in torchao.prototype.mx_formats.mx_tensor
     """
 
-    block_size: int = 32
+    block_size: Union[Literal[32], Literal[16]] = 32
 
-    # Dtypes for Input and Weights
+    # Dtypes for Input and Weights, supports Fp8 and Fp4 formats
     activation_dtype: torch.dtype = torch.float8_e4m3fn
     weight_dtype: torch.dtype = torch.float8_e4m3fn
+
+    # Supports float8_e4m3fn, float8_e8m0fnu
+    # e8m0 for MX and e4m3 for NVFP4 on Cuda compatable devices
+    scale_dtype: torch.dtype = torch.float8_e8m0fnu
 
     # Which kernel to run for mm
     gemm_kernel_choice: MXGemmKernelChoice = MXGemmKernelChoice.CUBLAS
@@ -82,6 +110,9 @@ class MXFPInferenceConfig(AOBaseConfig):
         _validate_gemm_kernel_choice(
             self.gemm_kernel_choice, self.block_size, self.weight_dtype
         )
+        _validate_scale_dtype(
+            self.block_size, self.weight_dtype, self.activation_dtype, self.scale_dtype
+        )
 
 
 def _linear_extra_repr(self):
@@ -92,6 +123,7 @@ def _input_activation_quant_func_mxfp(
     x: torch.Tensor,
     activation_dtype: torch.dtype,
     block_size: int,
+    scale_dtype: Optional[torch.dtype] = None,
     scale: Optional[torch.Tensor] = None,
 ):
     """ """
@@ -102,6 +134,7 @@ def _input_activation_quant_func_mxfp(
         x,
         activation_dtype,
         block_size=block_size,
+        scale_dtype=scale_dtype,
         gemm_kernel_choice=None,  # Get from weight
         pack_fp6=False,  # TODO
     )
@@ -131,6 +164,7 @@ def _mx_inference_linear_transform(
         weight,
         weight_dtype,
         block_size=config.block_size,
+        scale_dtype=config.scale_dtype,
         gemm_kernel_choice=config.gemm_kernel_choice,
         pack_fp6=False,  # TODO
     )
@@ -139,6 +173,7 @@ def _mx_inference_linear_transform(
     input_quant_kwargs = {
         "block_size": config.block_size,
         "activation_dtype": activation_dtype,
+        "scale_dtype": config.scale_dtype,
         "scale": None,
     }
 

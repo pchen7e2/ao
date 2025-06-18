@@ -18,7 +18,7 @@ Exponent E8M0 encoding details (OCP spec section 5.4.1):
 """
 
 from enum import Enum, auto
-from typing import Callable, Dict, Union
+from typing import Callable, Dict, Optional, Union
 
 import torch
 
@@ -146,6 +146,7 @@ def to_mx(
     data_hp: torch.Tensor,
     elem_dtype: Union[torch.dtype, str],
     block_size: int,
+    scale_dtype: Optional[torch.dtype] = None,
     scaling_mode: ScaleCalculationMode = ScaleCalculationMode.FLOOR,
     pack_fp6: bool = False,
 ):
@@ -473,6 +474,7 @@ class MXTensor(torch.Tensor):
         elem_dtype,
         block_size,
         orig_dtype,
+        scale_dtype,
         use_fp4_custom_triton_dequant_kernel,
         gemm_kernel_choice,
         pack_fp6,
@@ -544,6 +546,7 @@ class MXTensor(torch.Tensor):
         self._elem_dtype = elem_dtype
         self._block_size = block_size
         self._orig_dtype = orig_dtype
+        self._scale_dtype = scale_dtype
         self._use_fp4_custom_triton_dequant_kernel = (
             use_fp4_custom_triton_dequant_kernel
         )
@@ -589,13 +592,14 @@ class MXTensor(torch.Tensor):
         data_hp: torch.Tensor,
         elem_dtype: Union[torch.dtype, str],
         block_size: int = BLOCK_SIZE_DEFAULT,
+        scale_dtype: Optional[torch.dtype] = None,
         scaling_mode: ScaleCalculationMode = ScaleCalculationMode.FLOOR,
         use_fp4_custom_triton_dequant_kernel: bool = False,
         gemm_kernel_choice: MXGemmKernelChoice = MXGemmKernelChoice.EMULATED,
         pack_fp6: bool = False,
     ):
         scale_e8m0_biased, data_lp = to_mx(
-            data_hp, elem_dtype, block_size, scaling_mode, pack_fp6
+            data_hp, elem_dtype, block_size, scale_dtype, scaling_mode, pack_fp6
         )
         return MXTensor(
             scale_e8m0_biased,
@@ -603,6 +607,7 @@ class MXTensor(torch.Tensor):
             elem_dtype,
             block_size,
             data_hp.dtype,
+            scale_dtype,
             use_fp4_custom_triton_dequant_kernel,
             gemm_kernel_choice,
             pack_fp6,
@@ -613,6 +618,7 @@ class MXTensor(torch.Tensor):
             "_elem_dtype": self._elem_dtype,
             "_block_size": self._block_size,
             "_orig_dtype": self._orig_dtype,
+            "_scale_dtype": self._scale_dtype,
             "_use_fp4_custom_triton_dequant_kernel": self._use_fp4_custom_triton_dequant_kernel,
             "_gemm_kernel_choice": self._gemm_kernel_choice,
             "_pack_fp6": self._pack_fp6,
@@ -632,6 +638,7 @@ class MXTensor(torch.Tensor):
             metadata["_elem_dtype"],
             metadata["_block_size"],
             metadata["_orig_dtype"],
+            metadata["_scale_dtype"],
             metadata["_use_fp4_custom_triton_dequant_kernel"],
             metadata["_gemm_kernel_choice"],
             metadata["_pack_fp6"],
@@ -664,6 +671,7 @@ class MXTensor(torch.Tensor):
             and self._elem_dtype == src._elem_dtype
             and self._block_size == src._block_size
             and self._orig_dtype == src._orig_dtype
+            and self._scale_dtype == src._scale_dtype
             and self._use_fp4_custom_triton_dequant_kernel
             == src._use_fp4_custom_triton_dequant_kernel
             and self._gemm_kernel_choice == src._gemm_kernel_choice

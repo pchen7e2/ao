@@ -104,6 +104,7 @@ class mx_mm(torch.autograd.Function):
                 w_elem_dtype,
                 block_size,
                 weight_hp.dtype,
+                None,  # scale_dtype
                 False,
                 gemm_kernel_choice,
                 False,
@@ -133,6 +134,7 @@ class mx_mm(torch.autograd.Function):
                 grad_elem_dtype,
                 block_size,
                 grad_output_hp_r.dtype,
+                None,  # scale_dtype
                 False,
                 gemm_kernel_choice,
                 False,
@@ -155,6 +157,7 @@ class mx_mm(torch.autograd.Function):
                 in_elem_dtype,
                 block_size,
                 input_hp_r.dtype,
+                None,  # scale_dtype
                 False,
                 gemm_kernel_choice,
                 False,
